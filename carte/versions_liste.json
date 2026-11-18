@@ -1,0 +1,14 @@
+{
+  "commentaire": "Versions publiées comparées sur le téléphone par versions.html. id = date de la page jeu.html dans l'historique du dépôt (AAAAMMJJTHHMM). scen : vol = Conquête, départ en vol (comme sur le Mac). chauffe : première mesure, non comptée (met le téléphone en température).",
+  "scen": ["vol"],
+  "chauffe": "20261117T1201",
+  "versions": [
+    { "id": "20261029T2038", "nom": "29 oct.", "note": "2 h de partie" },
+    { "id": "20261113T1404", "nom": "13 nov. 14 h", "note": "avant les ajouts visuels" },
+    { "id": "20261113T1834", "nom": "13 nov. 18 h", "note": "style, ombres, nuages" },
+    { "id": "20261113T2326", "nom": "13 nov. 23 h", "note": "météo, nuit, façades" },
+    { "id": "20261115T2002", "nom": "15 nov.", "note": "lot du 15" },
+    { "id": "20261116T1349", "nom": "16 nov. 14 h", "note": "arbres, sol allégés" },
+    { "id": "20261117T1201", "nom": "17 nov.", "note": "aujourd'hui" }
+  ]
+}

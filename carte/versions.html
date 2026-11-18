@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Versions</title>
+<!-- Page de mesure : lance tour à tour plusieurs versions publiées du jeu sur le téléphone, mesure chacune de la même façon
+     (versions_crochet.js), dans l'ordre puis dans l'ordre inverse (la chauffe du téléphone pèse pareil sur toutes), et montre le tableau.
+     Tout ce que le jeu range dans le navigateur est sauvegardé avant et remis à la fin (aussi après une mesure interrompue). -->
+<style>
+  :root { color-scheme: dark; --fond: #0b1220; --texte: #e8eef8; --pale: #8a97ab; --bleu: #2f7cf6; --bon: #5fd38a; --moyen: #f0b84a; --mauvais: #ff6b6b; }
+  html, body { background: var(--fond); }
+  body { margin: 0; color: var(--texte); font: 15px/1.4 -apple-system, system-ui, sans-serif;
+    padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left)); }
+  h1 { font-size: 19px; margin: 4px 0 10px; }
+  p { margin: 6px 0; color: var(--pale); }
+  button { font: 600 17px/1 -apple-system, system-ui, sans-serif; padding: 14px 22px; border-radius: 12px; border: 0; background: var(--bleu); color: #fff; margin: 6px 8px 6px 0; }
+  button.sec { background: #2a3447; }
+  .grand { font: 700 34px/1.2 -apple-system, system-ui, sans-serif; margin: 18px 0 6px; }
+  .defile { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { border-collapse: collapse; font: 12.5px/1.25 ui-monospace, Menlo, monospace; margin-top: 6px; }
+  th, td { padding: 3px 6px; text-align: right; border-bottom: 1px solid #1d2638; white-space: nowrap; }
+  th { color: var(--pale); font-weight: 600; }
+  th:first-child, td:first-child { text-align: left; }
+  td.note { color: var(--pale); text-align: left; }
+  .bon { color: var(--bon); } .moyen { color: var(--moyen); } .mauvais { color: var(--mauvais); }
+  ul { margin: 4px 0 8px; padding-left: 20px; color: var(--pale); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(async () => {
+  const K = { sauve: 'fighterz-versions-sauve', file: 'fighterz-versions-file', res: 'fighterz-versions-res', cours: 'fighterz-versions-cours' };
+  const NOS = new Set(Object.values(K));
+  const app = document.getElementById('app');
+  const lire = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } };
+  const ecrire = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+  const pause = ms => new Promise(ok => setTimeout(ok, ms));
+
+  // Réglages communs à toutes les mesures (mêmes que sur le Mac) : son coupé, résolution haute fixe, jour, beau temps,
+  // départ en vol, 2 alliés et 4 ennemis ; combat : 3 contre 3 face à face au-dessus de la côte de Port-Alizé.
+  const OPTS = { sound: false, hq: true, qualite: 2, tod: 0, cycleVu: true, meteo: 1, start: 0, count: 4, ennemis: 4, allies: 2, gyro: false, fps: false,
+    iaE: 40, iaA: 50, mode: 0, armed: true, sam: 1,
+    cb: { allies: 2, ennemis: 3, skill: 1, iaE: 40, iaA: 50, tod: 0, meteo: 1, depart: 0, armes: 0, avAllies: null, avEnnemis: null,
+      chacunAllies: false, chacunEnnemis: false, placesAllies: [], placesEnnemis: [] } };
+
+  const LISTE = await (await fetch('versions_liste.json', { cache: 'no-cache' })).json();
+  const parId = Object.fromEntries(LISTE.versions.map(v => [v.id, v]));
+
+  function sauvegarder() {
+    if (localStorage.getItem(K.sauve)) return;
+    const o = {};
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!NOS.has(k)) o[k] = localStorage.getItem(k); }
+    localStorage.setItem(K.sauve, JSON.stringify(o));
+  }
+  function restaurer() {
+    const s = localStorage.getItem(K.sauve);
+    if (s) {
+      const o = JSON.parse(s), cles = [];
+      for (let i = 0; i < localStorage.length; i++) cles.push(localStorage.key(i));
+      for (const k of cles) if (!NOS.has(k)) localStorage.removeItem(k);
+      for (const [k, v] of Object.entries(o)) localStorage.setItem(k, v);
+    }
+    for (const k of [K.sauve, K.file, K.cours]) localStorage.removeItem(k);
+  }
+  function fabriquerFile() {
+    const f = [];
+    for (const scen of LISTE.scen) {
+      if (LISTE.chauffe) f.push({ id: LISTE.chauffe, scen, chauffe: true });
+      const vs = LISTE.versions.filter(v => !(scen === 'combat' && v.sansCombat));
+      for (const v of vs) f.push({ id: v.id, scen });
+      for (const v of [...vs].reverse()) f.push({ id: v.id, scen });
+    }
+    return f.map((r, i) => ({ ...r, rang: `${i + 1}/${f.length}` }));
+  }
+  async function suivante() {
+    const file = lire(K.file, []);
+    if (!file.length) { restaurer(); return montrerResultats(true); }
+    const r = file.shift();
+    ecrire(K.file, file);
+    localStorage.setItem('rafale-opts', JSON.stringify(OPTS));
+    for (const k of ['rafale-partie', 'fighterz-style']) localStorage.removeItem(k);
+    const v = parId[r.id] || { nom: r.id };
+    for (let s = 4; s > 0; s--) {
+      app.innerHTML = `<div class="grand">${r.rang}</div><p>${v.nom}${v.note ? ' · ' + v.note : ''} · ${r.scen === 'combat' ? 'combat' : 'vol'}${r.chauffe ? ' · chauffe' : ''}</p><p>${s}</p>`;
+      await pause(1000);
+    }
+    const page = `vjeu_${r.id}.html?versions=${encodeURIComponent(r.id)}&scen=${r.scen}&rang=${encodeURIComponent(r.rang)}${r.chauffe ? '&chauffe=1' : ''}`;
+    location.replace(page);
+  }
+
+  const med = a => { const v = a.filter(x => x != null && isFinite(x)).sort((x, y) => x - y); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
+  const cl = (x, bon, moyen, inverse) => x == null ? '' : (inverse ? (x <= bon ? 'bon' : x <= moyen ? 'moyen' : 'mauvais') : (x >= bon ? 'bon' : x >= moyen ? 'moyen' : 'mauvais'));
+  const f1 = x => x == null ? '–' : (Math.round(x * 10) / 10).toString();
+  const f0 = x => x == null ? '–' : Math.round(x).toString();
+
+  function montrerResultats(fini) {
+    const res = lire(K.res, []).filter(r => !r.chauffe);
+    const lignes = [];
+    for (const scen of LISTE.scen) {
+      for (const v of LISTE.versions) {
+        const rs = res.filter(r => r.id === v.id && r.scen === scen && !r.echec);
+        const ech = res.filter(r => r.id === v.id && r.scen === scen && r.echec).length;
+        if (!rs.length && !ech) continue;
+        lignes.push({ v, scen, n: rs.length, ech, ips: med(rs.map(r => r.ips)), ipsTous: rs.map(r => f0(r.ips)).join('·'), a60: med(rs.map(r => r.a60)),
+          lent: med(rs.map(r => r.lent)), acoups: med(rs.map(r => r.acoups)), vrai: med(rs.map(r => r.vrai)), vrai90: med(rs.map(r => r.vrai90)),
+          js: med(rs.map(r => r.js)), dessins: med(rs.map(r => r.dessins)) });
+      }
+    }
+    const appareil = res[0] ? `${res[0].ecran} · ×${res[0].dpr}` : '';
+    let h = `<h1>${fini ? 'Mesure terminée' : 'Résultats'}</h1><p>${appareil} · ${new Date().toLocaleString('fr-FR')}</p><div class="defile"><table>
+      <tr><th>version</th><th>scène</th><th>img/s</th><th>(aller·retour)</th><th>à 60</th><th>1 % lentes</th><th>à-coups</th><th>vrai temps</th><th>(90 %)</th><th>JS</th><th>dessins</th><th></th></tr>`;
+    for (const l of lignes) {
+      h += `<tr><td>${l.v.nom}</td><td>${l.scen}</td><td class="${cl(l.ips, 57, 45)}">${f1(l.ips)}</td><td>${l.ipsTous}</td><td class="${cl(l.a60, 95, 75)}">${f0(l.a60)} %</td>
+        <td class="${cl(l.lent, 20, 40, true)}">${f0(l.lent)}</td><td class="${cl(l.acoups, 0, 2, true)}">${f0(l.acoups)}</td>
+        <td class="${cl(l.vrai, 14, 20, true)}">${f1(l.vrai)}</td><td>${f1(l.vrai90)}</td><td>${f1(l.js)}</td><td>${f0(l.dessins)}</td>
+        <td class="note">${l.v.note || ''}${l.ech ? ' · ' + l.ech + ' échec' : ''}</td></tr>`;
+    }
+    h += `</table></div>`;
+    if (fini) h += `<p>Fais une capture de cet écran et envoie-la. Tes réglages et ta partie ont été remis comme avant.</p>`;
+    h += `<button id="bRelancer" class="sec">Recommencer</button>`;
+    app.innerHTML = h;
+    document.getElementById('bRelancer').onclick = () => accueil();
+    if (fini) {
+      // servi depuis le Mac (serveur_versions.py) : les résultats y arrivent directement ; ailleurs, l'envoi échoue sans rien dire
+      try { fetch('resultat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quand: new Date().toISOString(), ua: navigator.userAgent, res: lire(K.res, []) }) }).catch(() => {}); } catch (e) {}
+    }
+  }
+
+  function accueil() {
+    const file = fabriquerFile();
+    const minutes = Math.round(file.length * 55 / 60);
+    const vs = LISTE.versions.map(v => `<li>${v.nom}${v.note ? ' · ' + v.note : ''}</li>`).join('');
+    app.innerHTML = `<h1>Comparer les versions</h1>
+      <p>${file.length} mesures, environ ${minutes} min. Pendant la mesure, ne touche plus l'écran.</p>
+      <ul>${vs}</ul>
+      <p>Avant : mode économie d'énergie coupé, téléphone pas en charge, verrouillage automatique sur « Jamais » (Réglages › Luminosité et affichage).</p>
+      <button id="bGo">Lancer</button>`;
+    document.getElementById('bGo').onclick = () => {
+      sauvegarder();
+      localStorage.setItem(K.res, '[]');
+      ecrire(K.file, file);
+      suivante();
+    };
+  }
+
+  const P = new URLSearchParams(location.search);
+  const file = lire(K.file, null);
+  if (P.has('suite') && file) return suivante();
+  if (file && file.length) {
+    app.innerHTML = `<h1>Mesure interrompue</h1><p>Il reste ${file.length} mesures.</p><button id="bRep">Reprendre</button><button id="bStop" class="sec">Arrêter</button>`;
+    document.getElementById('bRep').onclick = () => suivante();
+    document.getElementById('bStop').onclick = () => { restaurer(); montrerResultats(false); };
+    return;
+  }
+  if (lire(K.res, []).length && !localStorage.getItem(K.sauve)) return montrerResultats(false);
+  accueil();
+})();
+</script>
+</body>
+</html>
