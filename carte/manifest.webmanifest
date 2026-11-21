@@ -1,0 +1,14 @@
+{
+  "name": "Fighterz – combat aérien",
+  "short_name": "Fighterz",
+  "start_url": "jeu.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0e1520",
+  "theme_color": "#0e1520",
+  "icons": [
+    { "src": "icones/icone-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icones/icone-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
